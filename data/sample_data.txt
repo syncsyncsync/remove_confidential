@@ -1,0 +1,8 @@
+The CEO of the company is John Smith.
+The CEO of the company is [PERSON].
+My email address is john@example.com.
+My email address is [EMAIL].
+会社のCEOは田中太郎です。
+会社のCEOは[PERSON]です。
+私のメールアドレスはtaro@example.comです。
+私のメールアドレスは[EMAIL]です。

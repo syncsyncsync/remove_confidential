@@ -1,10 +1,9 @@
 import glob
 import torch
 from transformers import DistilBertForMaskedLM, DistilBertTokenizer
-from torch.utils.data import Dataset, random_split
 from transformers import AutoModelForMaskedLM, AutoTokenizer
+from torch.utils.data import Dataset, random_split
 from transformers import Trainer, TrainingArguments
-
 
 def is_correct_format(lines):
     for i, line in enumerate(lines):
@@ -27,8 +26,11 @@ class ConfidentialDataset(Dataset):
 
     def __getitem__(self, idx):
         input_text, target_text = self.data[idx]
-        input_encoding = self.tokenizer(input_text, return_tensors="pt", padding="max_length", max_length=128, truncation=True)
-        target_encoding = self.tokenizer(target_text, return_tensors="pt", padding="max_length", max_length=128, truncation=True)
+
+        input_encoding = self.tokenizer.encode_plus(input_text, return_tensors="pt", padding="max_length", max_length=128, truncation=True)
+        target_encoding = self.tokenizer.encode_plus(target_text, return_tensors="pt", padding="max_length", max_length=128, truncation=True)
+        #input_encoding = self.tokenizer(input_text, return_tensors="pt", padding="max_length", max_length=128, truncation=True)
+        #target_encoding = self.tokenizer(target_text, return_tensors="pt", padding="max_length", max_length=128, truncation=True)
         return {
             "input_ids": input_encoding["input_ids"].squeeze(),
             "attention_mask": input_encoding["attention_mask"].squeeze(),
@@ -36,10 +38,16 @@ class ConfidentialDataset(Dataset):
         }
 
 
-def predict(input_text, fine_tuned_model_name="fine_tuned_multilingual_bert",device = "cpu"):
-    model = DistilBertForMaskedLM.from_pretrained(fine_tuned_model_name)
-    tokenizer = DistilBertTokenizer.from_pretrained(fine_tuned_model_name)
-
+def predict(input_text, fine_tuned_model_name="fine_tuned_multilingual_bert", model_type="bert", device="cpu"):
+    if model_type == "bert":
+        model = AutoModelForMaskedLM.from_pretrained(fine_tuned_model_name)
+        tokenizer = AutoTokenizer.from_pretrained(fine_tuned_model_name)
+    elif model_type == "distilbert":
+        model = DistilBertForMaskedLM.from_pretrained(fine_tuned_model_name)
+        tokenizer = DistilBertTokenizer.from_pretrained(fine_tuned_model_name)
+    else:
+        raise ValueError(f"Invalid model_type: {model_type}")
+    
     model.eval()
     model.to(device)
 
@@ -54,11 +62,17 @@ def predict(input_text, fine_tuned_model_name="fine_tuned_multilingual_bert",dev
     return predicted_text
 
 
-def train():
-    model_name = "bert-base-multilingual-uncased"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model_name="bert-base-multilingual-uncased"
-    model = AutoModelForMaskedLM.from_pretrained(model_name)
+def train(fine_tuned_model_name="fine_tuned_multilingual_bert", model_type="bert", num_epochs=3, train_batch_size=4, eval_batch_size=4, eval_strategy="epoch"):
+    if model_type == "bert":
+        model_name = "bert-base-multilingual-uncased"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForMaskedLM.from_pretrained(model_name)
+    elif model_type == "distilbert":
+        model_name = "distilbert-base-multilingual-cased"
+        tokenizer = DistilBertTokenizer.from_pretrained(model_name)
+        model = DistilBertForMaskedLM.from_pretrained(model_name)
+    else:
+        raise ValueError(f"Invalid model_type: {model_type}")
 
     # Read data from files
     files = glob.glob("data/*.txt")
@@ -83,10 +97,10 @@ def train():
 
     training_args = TrainingArguments(
         output_dir="./results",
-        num_train_epochs=3,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        evaluation_strategy="epoch",
+        num_train_epochs=num_epochs,
+        per_device_train_batch_size=train_batch_size,
+        per_device_eval_batch_size=eval_batch_size,
+        evaluation_strategy=eval_strategy,
         logging_dir="./logs",
     )
 
@@ -99,11 +113,9 @@ def train():
 
     trainer.train()
 
-    model.save_pretrained("fine_tuned_multilingual_bert")
-    tokenizer.save_pretrained("fine_tuned_multilingual_bert")
-
+    model.save_pretrained(fine_tuned_model_name)
+    tokenizer.save_pretrained(fine_tuned_model_name)
 
 if __name__ == "__main__":
     train()
     print(predict("I am a student."))
-    print(predict("I am a student.", "fine_tuned_multilingual_bert"))
